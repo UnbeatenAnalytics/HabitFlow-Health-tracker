@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HabitFlow - Health & Productivity Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #FFF8F0; /* Soft cream background */
+        }
+        .panel {
+            background: #FFFFFF;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 4px 6px -2px rgba(0, 0, 0, 0.04);
+        }
+        .btn-primary {
+             background: linear-gradient(135deg, #FF8C42 0%, #FF3C83 100%);
+             transition: all 0.3s ease;
+             box-shadow: 0 4px 15px 0 rgba(255, 107, 107, 0.4);
+        }
+        .btn-primary:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 6px 20px 0 rgba(255, 107, 107, 0.5);
+        }
+        .habit-card, .todo-item { transition: all 0.3s ease-in-out; animation: fadeInUp 0.5s ease-in-out; }
+        .habit-card.completed { background-color: #F0FFF4; border-color: #27A656; }
+        .habit-card.completed .habit-name { text-decoration: line-through; color: #6b7280; }
+        .modal-overlay { transition: opacity 0.3s ease; }
+        .modal-content { transition: all 0.3s ease; }
+        .todo-item.completed span { text-decoration: line-through; color: #9ca3af; }
+        @keyframes fadeInUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+        .fade-out { animation: fadeOut 0.4s forwards; }
+        @keyframes fadeOut { from { opacity: 1; transform: scale(1); } to { opacity: 0; transform: scale(0.9); } }
+        .pop { animation: pop 0.3s ease-out; }
+        @keyframes pop { 0% { transform: scale(0.8); } 70% { transform: scale(1.1); } 100% { transform: scale(1); } }
+        .progress-bar-fill { transition: width 0.5s ease-in-out; }
+        .empty-state { text-align: center; padding: 2rem; }
+        .tab-btn { transition: all 0.3s ease; border-bottom: 3px solid transparent; font-weight: 600; }
+        .tab-btn.active { color: #FF6347; border-bottom-color: #FF6347; }
+    </style>
+</head>
+<body class="text-slate-800">
+    <div class="container mx-auto max-w-5xl p-4 sm:p-6 md:p-8">
+        <header class="text-center mb-10">
+            <h1 class="text-4xl sm:text-5xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-orange-500 to-pink-500">HabitFlow</h1>
+            <p id="welcome-message" class="text-slate-600 mt-2 text-lg">Your all-in-one health & productivity dashboard.</p>
+        </header>
+        <main class="space-y-8">
+            <div class="grid grid-cols-1 lg:grid-cols-5 gap-8">
+                <section class="lg:col-span-3 panel p-6 rounded-2xl">
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-2xl font-bold">Today's Habits</h2>
+                        <button id="open-habit-modal-btn" class="btn-primary text-white font-semibold py-2 px-4 rounded-lg focus:outline-none"><i class="fas fa-plus mr-2"></i> Add Habit</button>
+                    </div>
+                    <div class="mb-4">
+                         <div class="flex justify-between mb-1"><span class="text-base font-medium text-slate-700">Daily Progress</span><span id="progress-text" class="text-sm font-medium text-slate-700">0%</span></div>
+                        <div class="w-full bg-slate-200 rounded-full h-2.5"><div id="progress-bar-fill" class="bg-gradient-to-r from-teal-400 to-cyan-500 h-2.5 rounded-full progress-bar-fill" style="width: 0%"></div></div>
+                    </div>
+                    <div id="habit-list" class="space-y-3"></div>
+                </section>
+                <aside class="lg:col-span-2 panel p-6 rounded-2xl">
+                    <h2 class="text-2xl font-bold mb-4">Daily To-Do List</h2>
+                    <div class="flex gap-2 mb-4">
+                        <input type="text" id="todo-input" placeholder="Add a new task..." class="flex-grow p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:outline-none transition bg-white/50">
+                        <button id="add-todo-btn" class="bg-teal-500 hover:bg-teal-600 text-white font-bold py-2 px-4 rounded-lg transition"><i class="fas fa-plus"></i></button>
+                    </div>
+                    <ul id="todo-list" class="space-y-3"></ul>
+                </aside>
+            </div>
+            <section class="panel p-6 rounded-2xl">
+                <div class="border-b border-slate-200 mb-4">
+                    <nav class="-mb-px flex space-x-6" id="tabs">
+                        <button data-tab="analytics" class="tab-btn active py-3 px-1 text-lg text-slate-500 hover:text-orange-600">Analytics</button>
+                        <button data-tab="health" class="tab-btn py-3 px-1 text-lg text-slate-500 hover:text-orange-600">Health Dashboard</button>
+                    </nav>
+                </div>
+                <div>
+                    <div id="analytics-content" class="tab-content">
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                            <div><h3 class="text-xl font-bold mb-4 text-center">Weekly Consistency</h3><div class="h-64"><canvas id="weekly-chart"></canvas></div></div>
+                            <div><h3 class="text-xl font-bold mb-4 text-center">Total Completions</h3><div class="h-64"><canvas id="breakdown-chart"></canvas></div></div>
+                        </div>
+                    </div>
+                    <div id="health-content" class="tab-content hidden">
+                         <div class="max-w-md mx-auto">
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+                                <div><label for="weight" class="font-semibold text-sm">Weight (kg)</label><input type="number" id="weight-input" placeholder="e.g., 70" class="w-full mt-1 p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:outline-none transition bg-white/50"></div>
+                                <div><label for="height" class="font-semibold text-sm">Height (cm)</label><input type="number" id="height-input" placeholder="e.g., 175" class="w-full mt-1 p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:outline-none transition bg-white/50"></div>
+                            </div>
+                            <button id="calculate-bmi-btn" class="w-full bg-orange-500 hover:bg-orange-600 text-white font-semibold py-2 px-4 rounded-lg transition mb-4">Calculate & Get Advice</button>
+                            <div id="health-results" class="bg-orange-50 p-4 rounded-lg text-center hidden"><h3 class="font-bold">Your BMI: <span id="bmi-value"></span></h3><p id="health-advice" class="mt-2 text-sm"></p></div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+    <div id="habit-modal" class="modal-overlay fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 hidden opacity-0">
+        <div class="modal-content bg-white w-full max-w-lg rounded-2xl shadow-xl p-6 transform scale-95 opacity-0">
+             <div class="flex justify-between items-center mb-4"><h2 class="text-xl font-bold">Choose a Habit</h2><button id="close-habit-modal-btn" class="text-slate-400 hover:text-slate-600 text-2xl">&times;</button></div>
+            <p class="text-slate-500 mb-4">Select from the suggestions below or add your own.</p>
+            <div id="suggested-habits" class="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-4"></div>
+            <div class="border-t pt-4"><h3 class="font-semibold mb-2">Add a Custom Habit</h3><div class="flex flex-col sm:flex-row gap-2"><input type="text" id="custom-habit-input" placeholder="Your new habit..." class="flex-grow p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:outline-none transition"><button id="add-custom-habit-btn" class="btn-primary text-white font-semibold py-2 px-4 rounded-lg">Add Custom</button></div></div>
+        </div>
+    </div>
+    <script>
+    document.addEventListener('DOMContentLoaded', () => {
+        let habits = JSON.parse(localStorage.getItem('habits')) || [];
+        let todos = JSON.parse(localStorage.getItem('todos')) || [];
+        let healthData = JSON.parse(localStorage.getItem('healthData')) || { weight: '', height: '' };
+        let weeklyChart, breakdownChart;
+
+        const setWelcomeMessage = () => {
+            const welcomeEl = document.getElementById('welcome-message');
+            const currentHour = new Date().getHours();
+            if (currentHour < 12) welcomeEl.textContent = 'Good Morning! Ready to start the day?';
+            else if (currentHour < 18) welcomeEl.textContent = 'Good Afternoon! Keep up the great work.';
+            else welcomeEl.textContent = 'Good Evening! Time to wind down.';
+        };
+
+        const renderCharts = () => {
+            if (!document.getElementById('weekly-chart') || !document.getElementById('breakdown-chart')) return;
+            // Sunset theme colors
+            const chartColors = ['#FF6347', '#FFD700', '#ADFF2F', '#40E0D0', '#6495ED', '#EE82EE'];
+            
+            const weeklyCtx = document.getElementById('weekly-chart').getContext('2d');
+            const days = Array.from({ length: 7 }, (_, i) => { const d = new Date(); d.setDate(d.getDate() - i); return d; }).reverse();
+            const labels = days.map(d => d.toLocaleString('en-US', { weekday: 'short' }));
+            const weeklyData = days.map(day => habits.filter(h => h.completedOn.includes(day.toISOString().split('T')[0])).length);
+            if(weeklyChart) weeklyChart.destroy();
+            weeklyChart = new Chart(weeklyCtx, { type: 'bar', data: { labels, datasets: [{ label: 'Habits Completed', data: weeklyData, backgroundColor: 'rgba(255, 99, 71, 0.6)', borderColor: 'rgba(255, 99, 71, 1)', borderWidth: 1, borderRadius: 5 }] }, options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } } } });
+
+            const breakdownCtx = document.getElementById('breakdown-chart').getContext('2d');
+            const breakdownLabels = habits.map(h => h.name);
+            const breakdownData = habits.map(h => h.completedOn.length);
+            if(breakdownChart) breakdownChart.destroy();
+            breakdownChart = new Chart(breakdownCtx, { type: 'doughnut', data: { labels: breakdownLabels.length > 0 ? breakdownLabels : ['No Habits'], datasets: [{ data: breakdownData.length > 0 ? breakdownData : [1], backgroundColor: chartColors, hoverOffset: 4 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } } });
+        };
+
+        const habitList = document.getElementById('habit-list');
+        const progressBarFill = document.getElementById('progress-bar-fill');
+        const progressText = document.getElementById('progress-text');
+        const saveHabits = () => localStorage.setItem('habits', JSON.stringify(habits));
+        const getTodayString = () => new Date().toISOString().split('T')[0];
+        
+        const updateHabitProgress = () => {
+            if (habits.length === 0) { progressText.textContent = '0%'; progressBarFill.style.width = '0%'; return; }
+            const completedHabits = habits.filter(h => h.completedOn.includes(getTodayString())).length;
+            const percentage = Math.round((completedHabits / habits.length) * 100);
+            progressText.textContent = `${percentage}%`; progressBarFill.style.width = `${percentage}%`;
+        };
+
+        const renderHabits = () => {
+            habitList.innerHTML = '';
+            if (habits.length === 0) {
+                habitList.innerHTML = `<div class="empty-state"><svg class="mx-auto h-24 w-24 text-slate-300" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" /></svg><p class="text-slate-500 mt-4">Click 'Add Habit' to get started!</p></div>`;
+            } else {
+                habits.forEach(habit => {
+                    const isCompletedToday = habit.completedOn.includes(getTodayString());
+                    const habitCard = document.createElement('div');
+                    habitCard.className = `habit-card border-l-4 p-3 rounded-lg flex items-center justify-between gap-4 ${isCompletedToday ? 'completed border-green-500' : 'bg-white/80 border-slate-200'}`;
+                    habitCard.dataset.id = habit.id;
+                    habitCard.innerHTML = `<div class="flex items-center gap-4"><button class="complete-btn text-2xl" data-id="${habit.id}"><i class="fa-regular ${isCompletedToday ? 'fa-solid fa-circle-check text-teal-500' : 'fa-circle text-slate-300 hover:text-teal-500'} transition"></i></button><span class="habit-name text-md font-medium">${habit.name}</span></div><button class="delete-btn text-slate-400 hover:text-red-500 transition" data-type="habit" data-id="${habit.id}"><i class="fas fa-trash-alt"></i></button>`;
+                    habitList.appendChild(habitCard);
+                });
+            }
+            updateHabitProgress();
+            renderCharts();
+        };
+
+        const addHabit = (name) => { if (name && !habits.some(h => h.name.toLowerCase() === name.toLowerCase())) { habits.push({ id: Date.now(), name, completedOn: [] }); saveHabits(); renderHabits(); } };
+        habitList.addEventListener('click', (e) => {
+            const btn = e.target.closest('.complete-btn');
+            if (btn) {
+                const habit = habits.find(h => h.id === Number(btn.dataset.id));
+                if (habit) {
+                    const icon = btn.querySelector('i'); icon.classList.add('pop'); icon.addEventListener('animationend', () => icon.classList.remove('pop'));
+                    const today = getTodayString(); const index = habit.completedOn.indexOf(today);
+                    if (index > -1) habit.completedOn.splice(index, 1); else habit.completedOn.push(today);
+                    saveHabits(); renderHabits();
+                }
+            }
+        });
+
+        const modal = document.getElementById('habit-modal');
+        const openModal = () => { modal.classList.remove('hidden'); setTimeout(() => { modal.classList.remove('opacity-0'); modal.querySelector('.modal-content').classList.remove('opacity-0', 'scale-95'); }, 10); };
+        const closeModal = () => { modal.classList.add('opacity-0'); modal.querySelector('.modal-content').classList.add('opacity-0', 'scale-95'); setTimeout(() => modal.classList.add('hidden'), 300); };
+        document.getElementById('open-habit-modal-btn').addEventListener('click', openModal);
+        document.getElementById('close-habit-modal-btn').addEventListener('click', closeModal);
+        document.getElementById('add-custom-habit-btn').addEventListener('click', () => { const input = document.getElementById('custom-habit-input'); addHabit(input.value.trim()); input.value = ''; closeModal(); });
+        const suggestions = ['Drink 8 glasses of water', 'Exercise for 30 minutes', 'Read for 15 minutes', 'Meditate for 5 minutes', 'Eat 5 servings of veggies', 'Sleep 8 hours'];
+        const suggestionsContainer = document.getElementById('suggested-habits');
+        suggestions.forEach(text => { const btn = document.createElement('button'); btn.className = 'bg-slate-100 hover:bg-orange-100 text-slate-700 font-medium py-2 px-3 rounded-lg text-sm transition'; btn.textContent = text; btn.onclick = () => { addHabit(text); closeModal(); }; suggestionsContainer.appendChild(btn); });
+
+        const weightInput = document.getElementById('weight-input');
+        const heightInput = document.getElementById('height-input');
+        const bmiBtn = document.getElementById('calculate-bmi-btn');
+        const healthResults = document.getElementById('health-results');
+        const bmiValEl = document.getElementById('bmi-value');
+        const healthAdviceEl = document.getElementById('health-advice');
+        const saveHealth = () => localStorage.setItem('healthData', JSON.stringify(healthData));
+        const updateHealth = () => {
+            const weight = parseFloat(weightInput.value), height = parseFloat(heightInput.value);
+            if(weight > 0 && height > 0) {
+                const bmi = weight / ((height / 100) ** 2);
+                bmiValEl.textContent = bmi.toFixed(1);
+                let advice = '';
+                if (bmi < 18.5) advice = 'You are underweight. Focus on nutrient-dense foods.';
+                else if (bmi < 24.9) advice = 'You are in a healthy weight range. Keep it up!';
+                else if (bmi < 29.9) advice = 'You are overweight. Focus on a balanced diet.';
+                else advice = 'You are in the obese range. Please consult a healthcare provider.';
+                healthAdviceEl.textContent = advice; healthResults.classList.remove('hidden');
+                healthData = { weight, height }; saveHealth();
+            }
+        };
+        bmiBtn.addEventListener('click', updateHealth);
+        weightInput.value = healthData.weight || ''; heightInput.value = healthData.height || '';
+        if (healthData.weight && healthData.height) updateHealth();
+
+        const todoInput = document.getElementById('todo-input');
+        const addTodoBtn = document.getElementById('add-todo-btn');
+        const todoList = document.getElementById('todo-list');
+        const saveTodos = () => localStorage.setItem('todos', JSON.stringify(todos));
+        const renderTodos = () => {
+            todoList.innerHTML = '';
+            if (todos.length === 0) {
+                todoList.innerHTML = `<div class="empty-state"><svg class="mx-auto h-24 w-24 text-slate-300" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg><p class="text-slate-500 mt-4">No tasks yet. Add one!</p></div>`;
+            } else {
+                todos.forEach(todo => {
+                    const li = document.createElement('li');
+                    li.className = `todo-item flex items-center justify-between p-3 rounded-lg ${todo.completed ? 'completed bg-slate-200/80' : 'bg-slate-100/80'}`;
+                    li.dataset.id = todo.id;
+                    li.innerHTML = `<div class="flex items-center gap-3"><button class="toggle-todo-btn text-xl" data-id="${todo.id}"><i class="fa-regular ${todo.completed ? 'fa-solid fa-circle-check text-teal-500' : 'fa-circle text-slate-300'}"></i></button><span>${todo.text}</span></div><button class="delete-btn text-slate-400 hover:text-red-500" data-type="todo" data-id="${todo.id}"><i class="fas fa-times"></i></button>`;
+                    todoList.appendChild(li);
+                });
+            }
+        };
+        addTodoBtn.addEventListener('click', () => { const text = todoInput.value.trim(); if (text) { todos.push({ id: Date.now(), text, completed: false }); saveTodos(); renderTodos(); todoInput.value = ''; } });
+        todoList.addEventListener('click', e => { const btn = e.target.closest('.toggle-todo-btn'); if (btn) { const todo = todos.find(t => t.id === Number(btn.dataset.id)); if(todo) { todo.completed = !todo.completed; saveTodos(); renderTodos(); } } });
+
+        document.body.addEventListener('click', e => {
+            const btn = e.target.closest('.delete-btn');
+            if (btn) {
+                const id = Number(btn.dataset.id), type = btn.dataset.type;
+                const el = document.querySelector(`[data-id='${id}']`);
+                if (el) el.classList.add('fade-out');
+                setTimeout(() => {
+                    if (type === 'habit') { habits = habits.filter(h => h.id !== id); saveHabits(); renderHabits(); } 
+                    else if (type === 'todo') { todos = todos.filter(t => t.id !== id); saveTodos(); renderTodos(); }
+                }, 400);
+            }
+        });
+
+        const tabs = document.getElementById('tabs');
+        tabs.addEventListener('click', (e) => {
+            if (e.target.matches('.tab-btn')) {
+                tabs.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+                e.target.classList.add('active');
+                document.querySelectorAll('.tab-content').forEach(c => c.classList.add('hidden'));
+                document.getElementById(`${e.target.dataset.tab}-content`).classList.remove('hidden');
+            }
+        });
+
+        setWelcomeMessage();
+        renderHabits();
+        renderTodos();
+    });
+    </script>
+</body>
+</html>
+
